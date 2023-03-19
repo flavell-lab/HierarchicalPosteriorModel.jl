@@ -4,14 +4,14 @@ struct ModelParameters
     x::Vector{Vector{Float64}}
 end
 
-function cart2spher(x_cart::Vector{Float64})
+function cart2spher(x_cart::Vector)
     r = norm(x_cart)
     theta = acos(x_cart[3] / r)
     phi = atan(x_cart[2], x_cart[1])
     return [r, theta, phi]
 end
 
-function spher2cart(x_spher::Vector{Float64})
+function spher2cart(x_spher::Vector)
     r, theta, phi = x_spher
     x = r * sin(theta) * cos(phi)
     y = r * sin(theta) * sin(phi)
@@ -20,61 +20,94 @@ function spher2cart(x_spher::Vector{Float64})
 end
 
 function angle_diff(theta1, theta2)
-    return atan(sin(theta1 - theta2), cos(theta1 - theta2))
+    diff = mod(theta1 - theta2 + π, 2π) - π
+    return diff
 end
 
-"""
-    initialize_kdes(Ps::Vector{Matrix{Float64}})
-
-Initialize the KDEs for each dataset in Ps.
-"""
-function initialize_kdes(Ps::Vector{Matrix{Float64}})
-    kdes = Vector{KDEMulti}(undef, length(Ps))
+function fit_multivariate_normals(Ps::Vector{Matrix{Float64}})
+    mvns = Vector{MvNormal}(undef, length(Ps))
 
     for i in 1:length(Ps)
         P_i = Ps[i]
-        kde_i = KDEMulti([ContinuousDim() for _ = 1:size(P_i,2)], nothing, [[P_i[i,param] for param=1:size(P_i,2)] for i=1:size(P_i,1)])
-        kdes[i] = kde_i
+        μ_i = mean(P_i, dims=1)[:]
+        Σ_i = cov(P_i)
+        mvn_i = MvNormal(μ_i, Σ_i)
+        mvns[i] = mvn_i
     end
 
-    return kdes
+    return mvns
+end
+
+function bic_multivariate_normals(Ps::Vector{Matrix{Float64}}, mvns::Vector{MvNormal})
+    bics = Vector{Float64}(undef, length(Ps))
+
+    for i in 1:length(Ps)
+        P_i = Ps[i]
+        n = size(P_i, 1)
+        k = size(P_i, 2)
+        log_likelihood_i = sum(logpdf.(mvns[i], eachrow(P_i)))
+        bic_i = -2 * log_likelihood_i + k * log(n)
+        bics[i] = bic_i
+    end
+
+    return bics
 end
 
 
-function joint_logprob(params::ModelParameters, data::Vector{Matrix{Float64}}, kdes::Vector; idx_scaling::Vector{Int64}=[2,3,4])
-    logprob = Threads.Atomic{Float64}(0.0)
+
+function joint_logprob_flat(params_flat::Vector, data::Vector{Matrix{Float64}}, mvns::Vector, idx_scaling::Vector{Int64})
+    n_params = size(data[1], 2)
+    mu = params_flat[1:n_params]
+    sigma = params_flat[n_params + 1:2 * n_params]
+    x_flat = params_flat[2 * n_params + 1:end]
+    x_spher = [x_flat[(i - 1) * n_params + 1 : i * n_params] for i in 1:length(data)]
+
+    logprob = 0.0
 
     # Add log probability of higher-level parameters
-    mu = params.mu
-    sigma = params.sigma
-    
-    logprob[] += sum(Distributions.logpdf.(Normal(0, 1), mu[[i for i in 1:length(mu) if !(i in idx_scaling)]]))  # Prior for c_vT and lambda
-    logprob[] += Distributions.logpdf(LogNormal(0,1), mu[idx_scaling[1]]) # Prior for r; note that prior for phi and theta is uniform
-    
-    logprob[] += sum(Distributions.logpdf.(Normal(-8, 1), sigma[[i for i in 1:length(mu) if !(i in idx_scaling)]]))  # Prior for sigma_cvT and sigma_lambda
-    logprob[] += Distributions.logpdf(Normal(-5, 1), sigma[idx_scaling[1]])  # Prior for sigma_r
-    logprob[] += sum(Distributions.logpdf.(Normal(-8, 1), sigma[idx_scaling[2:end]]))  # Prior for sigma_theta and sigma_phi
+    logprob += sum(Distributions.logpdf.(Normal(0, 1), mu[[i for i in 1:length(mu) if !(i in idx_scaling)]]))  # Prior for c_vT and lambda
+    logprob += Distributions.logpdf(LogNormal(0,1), mu[idx_scaling[1]]) # Prior for r; note that prior for phi and theta is uniform
+
+    logprob += sum(Distributions.logpdf.(Normal(-8, 1), sigma[[i for i in 1:length(mu) if !(i in idx_scaling)]]))  # Prior for sigma_cvT and sigma_lambda
+    logprob += Distributions.logpdf(Normal(-5, 1), sigma[idx_scaling[1]])  # Prior for sigma_r
+    logprob += sum(Distributions.logpdf.(Normal(-8, 1), sigma[idx_scaling[2:end]]))  # Prior for sigma_theta and sigma_phi
 
     # Add log probability of lower-level parameters and data
     for i in 1:length(data)
-        x_i_spher = params.x[i]
-        x_i_cart = copy(x_i_spher)
-        x_i_cart[idx_scaling] = spher2cart(x_i_spher[idx_scaling])
-        
+        x_i_spher = x_spher[i]
+
+        x_i_cart = [x_i_spher[1], spher2cart(x_i_spher[idx_scaling])..., x_i_spher[5]]
+
         P_i = data[i]
         for j in 1:size(P_i,2)
             if j in idx_scaling[2:3]
-                Threads.atomic_add!(logprob, Distributions.logpdf(Normal(0, exp(sigma[j])), angle_diff(mu[j], x_i_spher[j])))
+                logprob += Distributions.logpdf(Normal(0, exp(sigma[j])), angle_diff(mu[j], x_i_spher[j]))
+            elseif j == idx_scaling[1]
+                logprob += Distributions.logpdf(Normal(abs(mu[j]), exp(sigma[j])), x_i_spher[j])
             else
-                Threads.atomic_add!(logprob, Distributions.logpdf(Normal(mu[j], exp(sigma[j])), x_i_spher[j]))
+                logprob += Distributions.logpdf(Normal(mu[j], exp(sigma[j])), x_i_spher[j])
             end
         end
-        Threads.atomic_add!(logprob, log(MultiKDE.pdf(kdes[i], x_i_cart)))
+        logprob += Distributions.logpdf(mvns[i], x_i_cart)
     end
 
-    return logprob[]
+    return logprob
 end
 
+function joint_logprob(params::ModelParameters, data::Vector{Matrix{Float64}}, mvns::Vector; idx_scaling::Vector{Int64}=[2,3,4])
+    n_params = size(data[1], 2)
+    mu = params.mu
+    sigma = params.sigma
+    x_spher = params.x
+
+    params_flat = [mu; sigma; vcat(x_spher...)]
+
+    return joint_logprob_flat(params_flat, data, mvns, idx_scaling=idx_scaling)
+end
+
+function joint_logprob_flat_negated(params_flat::Vector, data::Vector{Matrix{Float64}}, mvns::Vector, idx_scaling::Vector{Int64})
+    return -joint_logprob_flat(params_flat, data, mvns, idx_scaling)
+end
 
 
 """
@@ -84,20 +117,7 @@ Perform maximum a posteriori (MAP) estimation for the hierarchical model.
 """
 function optimize_MAP(Ps::Vector{Matrix{Float64}}, params_init::ModelParameters; idx_scaling::Vector{Int64}=[2,3,4])
     # Initialize the KDEs
-    kdes = initialize_kdes(Ps)
-    function neg_logprob(params::Vector{Float64})
-        # Unpack the parameters
-        mu = params[1:size(Ps[1],2)]
-        sigma = params[size(Ps[1],2) + 1:2 * size(Ps[1],2)]
-        x_flat = params[2 * size(Ps[1],2) + 1:end]
-        x_spher = [x_flat[(i - 1) * size(Ps[1],2) + 1 : i * size(Ps[1],2)] for i in 1:length(Ps)]
-
-        # Create a new ModelParameters struct
-        new_params = ModelParameters(mu, sigma, x_spher)
-
-        # Calculate the negative log probability
-        return -joint_logprob(new_params, Ps, kdes)
-    end
+    mvns = fit_multivariate_normals(Ps)
 
     # Flatten the initial parameters
     mu_init = params_init.mu
@@ -106,34 +126,30 @@ function optimize_MAP(Ps::Vector{Matrix{Float64}}, params_init::ModelParameters;
 
     params_init_flat = vcat(mu_init, sigma_init, x_init_flat)
 
-    lower_bounds = fill(-5.0, length(params_init_flat))
-    upper_bounds = fill(5.0, length(params_init_flat))
+    # Compute the gradient
+    joint_logprob_grad = params -> ForwardDiff.gradient(p -> joint_logprob_flat_negated(p, Ps, mvns, [2,3,4]), params)
 
+    # Compute the Hessian
+    joint_logprob_hessian = params -> ForwardDiff.hessian(p -> joint_logprob_flat_negated(p, Ps, mvns, [2,3,4]), params)
 
-    lower_bounds[idx_scaling[1]] = 0.0
-    lower_bounds[idx_scaling[2]] = 0.0
-    lower_bounds[idx_scaling[3]] = -π
+    # println(joint_logprob_flat_negated(params_init_flat, Ps, mvns, [2,3,4]))
 
-    upper_bounds[idx_scaling[1]] = 5.0
-    upper_bounds[idx_scaling[2]] = π
-    upper_bounds[idx_scaling[3]] = π
+    # println(size(joint_logprob_grad(params_init_flat)))
 
-    for i in length(mu_init)+1:length(mu_init)+length(sigma_init)
-        lower_bounds[i] = -10.0
-        upper_bounds[i] = 1.0
+    # println(size(joint_logprob_hessian(params_init_flat)))
+
+    function g!(G, x)
+        if G !== nothing
+            G .= joint_logprob_grad(x)
+        end
     end
 
-    for i in 1:length(Ps)
-        lower_bounds[2 * size(Ps[1],2) + (i - 1) * size(Ps[1],2) + idx_scaling[1]] = 0.0  # lower bound for r
-        lower_bounds[2 * size(Ps[1],2) + (i - 1) * size(Ps[1],2) + idx_scaling[2]] = 0.0  # lower bound for theta
-        lower_bounds[2 * size(Ps[1],2) + (i - 1) * size(Ps[1],2) + idx_scaling[3]] = -π  # lower bound for phi
-        upper_bounds[2 * size(Ps[1],2) + (i - 1) * size(Ps[1],2) + idx_scaling[1]] = 5.0  # upper bound for r
-        upper_bounds[2 * size(Ps[1],2) + (i - 1) * size(Ps[1],2) + idx_scaling[2]] = π    # upper bound for theta
-        upper_bounds[2 * size(Ps[1],2) + (i - 1) * size(Ps[1],2) + idx_scaling[3]] = π   # upper bound for phi
+    function h!(H, x)
+        H .= joint_logprob_hessian(x)
     end
 
-    # Perform L-BFGS optimization
-    result = optimize(neg_logprob, lower_bounds, upper_bounds, params_init_flat, Fminbox(Optim.GradientDescent()))
+    # Perform Newton optimization
+    result = optimize(x->joint_logprob_flat_negated(x, Ps, mvns, [2,3,4]), g!, h!, params_init_flat, Optim.Newton())
 
     # Unpack the optimized parameters
     params_opt = Optim.minimizer(result)
@@ -145,7 +161,7 @@ function optimize_MAP(Ps::Vector{Matrix{Float64}}, params_init::ModelParameters;
     # Create the optimized ModelParameters struct
     params_opt_struct = ModelParameters(mu_opt, sigma_opt, x_opt)
 
-    return params_opt_struct
+    return params_opt_struct, result
 end
 
 
