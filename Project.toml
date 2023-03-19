@@ -1,0 +1,4 @@
+name = "HierarchicalPosteriorModel"
+uuid = "ef6dc223-d5d9-4b1e-8fe9-3290aa0c7c6f"
+authors = ["Adam Atanas <adamatanas@gmail.com>"]
+version = "0.1.0"
