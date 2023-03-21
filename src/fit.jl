@@ -1,0 +1,89 @@
+"""
+optimize_MAP(Ps::Vector{Matrix{Float64}}, params_init::ModelParameters; idx_scaling::Vector{Int64}=[2,3,4])
+
+Optimize the maximum a posteriori (MAP) estimate for the given parameter samples `Ps` and initial parameters `params_init`.
+
+# Arguments
+- `Ps::Vector{Matrix{Float64}}`: A vector of matrices containing the CePNEM parameter samples for each dataset.
+- `params_init::ModelParameters`: A ModelParameters instance containing the initial values for mu, sigma, and x parameters.
+- `idx_scaling::Vector{Int64}`: An optional vector of indices indicating the parameters that need to be transformed to Cartesian coordinates for comparison into `mvns`.
+    Currently, it is not supported for this to be any value other than its default `[2,3,4]`.
+- `max_iters::Int64`: An optional integer indicating the maximum number of iterations for the optimization process. Default 200.
+
+# Returns
+- `params_opt_struct`: A ModelParameters instance containing the optimized values for mu, sigma, and x parameters.
+- `result`: The result of the optimization process.
+"""
+function optimize_MAP(Ps::Vector{Matrix{Float64}}, params_init::ModelParameters; idx_scaling::Vector{Int64}=[2,3,4], max_iters::Int64=200)
+    # Initialize the KDEs
+    mvns = fit_multivariate_normals(Ps)
+
+    # Flatten the initial parameters
+    mu_init = params_init.mu
+    sigma_init = params_init.sigma
+    x_init_flat = vcat([params_init.x[i] for i in 1:length(Ps)]...)
+
+    params_init_flat = vcat(mu_init, sigma_init, x_init_flat)
+
+    # Compute the gradient
+    joint_logprob_grad = params -> ForwardDiff.gradient(p -> joint_logprob_flat_negated(p, Ps, mvns, idx_scaling), params)
+
+    # Compute the Hessian
+    joint_logprob_hessian = params -> ForwardDiff.hessian(p -> joint_logprob_flat_negated(p, Ps, mvns, idx_scaling), params)
+
+    function g!(G, x)
+        if G !== nothing
+            G .= joint_logprob_grad(x)
+        end
+    end
+
+    function h!(H, x)
+        H .= joint_logprob_hessian(x)
+    end
+
+    # Perform Newton optimization
+    result = optimize(x->joint_logprob_flat_negated(x, Ps, mvns, idx_scaling), g!, h!, params_init_flat, Optim.Newton(), Optim.Options(iterations=max_iters, store_trace=true))
+
+    # Unpack the optimized parameters
+    params_opt = Optim.minimizer(result)
+    mu_opt = params_opt[1:size(Ps[1],2)]
+    sigma_opt = params_opt[size(Ps[1],2) + 1:2 * size(Ps[1],2)]
+    x_opt_flat = params_opt[2 * size(Ps[1],2) + 1:end]
+    x_opt = [x_opt_flat[(i - 1) * size(Ps[1],2) + 1 : i * size(Ps[1],2)] for i in 1:length(Ps)]
+
+    # Create the optimized ModelParameters struct
+    params_opt_struct = ModelParameters(mu_opt, sigma_opt, x_opt)
+
+    return params_opt_struct, result
+end
+
+"""
+    initialize_params(Ps::Vector{Matrix{Float64}}; idx_scaling::Vector{Int64}=[2,3,4])
+
+Initialize the model parameters based on the given parameter samples `Ps`.
+
+# Arguments
+- `Ps::Vector{Matrix{Float64}}`: A vector of matrices containing the CePNEM parameter samples for each dataset.
+- `idx_scaling::Vector{Int64}`: An optional vector of indices indicating the parameters that need to be transformed to Cartesian coordinates for comparison into `mvns`.
+    Currently, it is not supported for this to be any value other than its default `[2,3,4]`.
+
+# Returns
+- `ModelParameters`: A ModelParameters instance containing the initialized values for mu, sigma, and x parameters.
+"""
+function initialize_params(Ps::Vector{Matrix{Float64}}; idx_scaling::Vector{Int64}=[2,3,4])
+    means = [mean(P, dims=1)[1, :] for P in Ps]
+    mu_init = mean(means, dims=1)[1]
+
+    x_init = means
+
+    mu_init[idx_scaling] = cart2spher(mu_init[idx_scaling])
+    mu_init[idx_scaling[1]] = log(mu_init[idx_scaling][1])
+    for i in 1:length(Ps)
+        x_init[i][idx_scaling] = cart2spher(x_init[i][idx_scaling])
+        x_init[i][idx_scaling[1]] = log(x_init[i][idx_scaling][1])
+    end
+
+    sigma_init = [std([x_init[i][j] for i=1:length(Ps)]) for j=1:length(mu_init)]
+
+    return ModelParameters(mu_init, sigma_init, x_init)
+end
