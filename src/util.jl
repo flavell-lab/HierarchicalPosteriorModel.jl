@@ -122,7 +122,6 @@ Return a vector of matrices containing the parameter sets for given `matches` an
 # Returns
 - `Ps`: A vector of matrices containing the parameter sets for the given `matches` and conditions.
 """
-
 function get_Ps(fit_results, matches, θh_pos_is_ventral; idx_use=[1,2,3,4,7], datasets_use=nothing, rngs_use=nothing, max_rng=2)
     Ps = Vector{Matrix{Float64}}(undef, max_rng*length(matches))
     count = 1
@@ -135,13 +134,14 @@ function get_Ps(fit_results, matches, θh_pos_is_ventral; idx_use=[1,2,3,4,7], d
                 continue
             end
             Ps[count] = deepcopy(fit_results[dataset]["sampled_trace_params"][rng,n,:,:])
-            Ps[count][:,4] = Ps[count][:,4] .* (1 - 2*θh_pos_is_ventral[dataset])
+            Ps[count][:,3] = Ps[count][:,3] .* (1 - 2*θh_pos_is_ventral[dataset])
             Ps[count] = Ps[count][:,idx_use]
             count += 1
         end
     end
     return Ps[1:count-1]
 end
+
 
 """
     get_variability(model_params::ModelParameters)
