@@ -2,8 +2,8 @@ module HierarchicalPosteriorModel
 
 using Distributions, Optim, Statistics, StatsBase, LinearAlgebra, ForwardDiff
 
-include("util.jl")
 include("model.jl")
+include("util.jl")
 include("fit.jl")
 
 export
