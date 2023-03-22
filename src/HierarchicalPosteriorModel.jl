@@ -4,6 +4,7 @@ using Distributions, Optim, Statistics, StatsBase, LinearAlgebra, ForwardDiff
 
 include("model.jl")
 include("util.jl")
+include("variability.jl")
 include("fit.jl")
 
 export
@@ -19,6 +20,10 @@ export
     fit_multivariate_normals,
     bic_multivariate_normals,
     get_Ps,
+    get_corrected_r,
+    exp_r,
+    get_datasets,
+    # variability.jl
     get_variability,
     # fit.jl
     initialize_params,

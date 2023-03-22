@@ -142,25 +142,65 @@ function get_Ps(fit_results, matches, θh_pos_is_ventral; idx_use=[1,2,3,4,7], d
     return Ps[1:count-1]
 end
 
-
 """
-    get_variability(model_params::ModelParameters)
+    get_corrected_r(analysis_dict::Dict, mu::Vector{Float64})
 
-Compute the variability metric based on the provided model parameters.
+Compute the corrected r value based on extrapolating the given mu array to the set of extrapolated behaviors.
 
 # Arguments
-- `model_params`: A `ModelParameters` instance containing the mean (mu) and standard deviation (sigma) parameters.
+- `analysis_dict::Dict`: Dictionary containing the `extrapolated_behaviors` array.
+- `mu::Vector{Float64}`: An array containing the mu values of the parameters.
 
 # Returns
-- `variability`: A scalar value representing the computed variability metric.
+- `corrected_r`: The computed corrected r value.
 """
-function get_variability(model_params::ModelParameters)
-    mu = model_params.mu
-    sigma = model_params.sigma
+function get_corrected_r(analysis_dict, mu)
+    mu_cart = [mu[1], spher2cart(exp_r(mu[2:4]))..., 0, 0, mu[5], 0]
+    extrap = model_nl8(length(analysis_dict["extrapolated_behaviors"][:,1]), mu_cart..., analysis_dict["extrapolated_behaviors"][:,1], analysis_dict["extrapolated_behaviors"][:,2], analysis_dict["extrapolated_behaviors"][:,3])
+    return std(extrap)
+end
 
-    exp_sigma = exp.(sigma)
+"""
+    exp_r(vec)
 
-    variability = exp_sigma[1] + exp_sigma[3] + exp_sigma[5] + exp_sigma[4] * abs(sin(mu[3])) # sigma[4] is phi, which needs to be scaled based on the mean theta value
+Compute the exponential of the first element of the input vector and concatenate it with the rest of the vector.
 
-    return variability
+# Arguments
+- `vec`: A vector of values.
+
+# Returns
+- `exp_r_vec`: A new vector with the first element exponentiated and the rest unchanged.
+"""
+function exp_r(vec)
+    return [exp(vec[1]), vec[2:end]...]
+end
+
+
+"""
+    get_datasets(matches; datasets_use=nothing, rngs_use=nothing)
+
+Retrieve datasets based on the given matches and optional filtering criteria.
+
+# Arguments
+- `matches`: A list of tuples containing the dataset identifier and the number of samples.
+- `datasets_use`: An optional list of dataset identifiers to include. If not provided, all datasets in `matches` will be used.
+- `rngs_use`: An optional dictionary of dataset identifiers with a list of range indices to include. If not provided, all ranges will be used.
+
+# Returns
+- `datasets`: A list of tuples containing the selected dataset identifier, range index, and number of samples.
+"""
+function get_datasets(matches; datasets_use=nothing, rngs_use=nothing)
+    datasets = []
+    for (dataset, n) in matches
+        if !isnothing(datasets_use) && !(dataset in datasets_use)
+            continue
+        end
+        for rng=1:length(fit_results[dataset]["ranges"])
+            if !isnothing(rngs_use) && !(rng in rngs_use[dataset])
+                continue
+            end
+            push!(datasets, (dataset, rng, n))
+        end
+    end
+    return datasets
 end
