@@ -182,14 +182,15 @@ end
 Retrieve datasets based on the given matches and optional filtering criteria.
 
 # Arguments
-- `matches`: A list of tuples containing the dataset identifier and the number of samples.
-- `datasets_use`: An optional list of dataset identifiers to include. If not provided, all datasets in `matches` will be used.
-- `rngs_use`: An optional dictionary of dataset identifiers with a list of range indices to include. If not provided, all ranges will be used.
+- `fit_results::Dict`: A dictionary containing the CePNEM fit results for each dataset.
+- `matches::Vector`: A list of tuples containing the dataset identifier and the number of samples.
+- `datasets_use::Union{Vector{String}, Nothing}`: An optional list of dataset identifiers to include. If not provided, all datasets in `matches` will be used.
+- `rngs_use::Union{Dict, Nothing}`: An optional dictionary of dataset identifiers with a list of range indices to include. If not provided, all ranges will be used.
 
 # Returns
 - `datasets`: A list of tuples containing the selected dataset identifier, range index, and number of samples.
 """
-function get_datasets(matches; datasets_use=nothing, rngs_use=nothing)
+function get_datasets(fit_results::Dict, matches::Vector; datasets_use::Union{Vector{String}, Nothing}=nothing, rngs_use::Union{Dict, Nothing}=nothing)
     datasets = []
     for (dataset, n) in matches
         if !isnothing(datasets_use) && !(dataset in datasets_use)
@@ -203,4 +204,199 @@ function get_datasets(matches; datasets_use=nothing, rngs_use=nothing)
         end
     end
     return datasets
+end
+
+"""
+    convert_hbparams_to_ps(hbparams::Vector{Float64})
+
+Convert the given hbparams 5-vector of `mu` or `x` from `HBParams` into a new `ps`` vector with 8 elements compatible with `model_nl8`.
+
+# Arguments
+- `hbparams::Vector{Float64}`: A vector of hierarchical model parameters.
+
+# Returns
+- `ps`: A new 8-element vector containing the converted hbparams.
+"""
+function convert_hbparams_to_ps(hbparams::Vector{Float64})
+    ps = zeros(8)
+    ps[1] = hbparams[1] # c_vT
+    ps[2:4] = spher2cart(exp_r(hbparams[2:4])) # c_v, c_θh, c_P
+    ps[5] = 0.0
+    ps[6] = 0.0
+    ps[7] = hbparams[5] # τ
+    ps[8] = 0.0
+    return deepcopy(ps)
+end
+
+"""
+    convert_hbdatasets_to_behs(fit_results::Dict, hbdatasets::Vector; max_len::Int=800)
+
+Convert the given hbdatasets into separate v, θh, and P arrays based on fit_results.
+
+# Arguments
+- `fit_results::Dict`: A dictionary containing the results of a model fitting process.
+- `hbdatasets::Vector`: A list of tuples containing the selected dataset identifier, range index, and number of samples.
+- `max_len::Int`: The maximum length of each dataset (default: 800).
+
+# Returns
+- `v`: A vector containing the concatenated v values from the datasets.
+- `θh`: A vector containing the concatenated θh values from the datasets.
+- `P`: A vector containing the concatenated P values from the datasets.
+"""
+function convert_hbdatasets_to_behs(fit_results::Dict, hbdatasets::Vector; max_len::Int=800)
+    v = zeros(max_len*length(hbdatasets))
+    θh = zeros(max_len*length(hbdatasets))
+    P = zeros(max_len*length(hbdatasets))
+    count = 1
+    for (dataset, rng, n) in hbdatasets
+        rng_t = fit_results[dataset]["ranges"][rng]
+        len = length(rng_t)
+        v[count:count+len-1] .= fit_results[dataset]["v"][rng_t]
+        θh[count:count+len-1] .= fit_results[dataset]["θh"][rng_t]
+        P[count:count+len-1] .= fit_results[dataset]["P"][rng_t]
+        count += len
+    end
+    v = v[1:count-1]
+    θh = θh[1:count-1]
+    P = P[1:count-1]
+    return v, θh, P
+end
+
+"""
+    angle_mean(angles::Vector{Float64})
+
+Compute the mean angle of the given angles vector.
+
+# Arguments
+- `angles::Vector{Float64}`: A vector of angles in radians.
+
+# Returns
+- `mean_angle`: The mean angle in radians.
+"""
+function angle_mean(angles::Vector{Float64})
+    if isempty(angles)
+        error("Input list cannot be empty")
+    end
+    
+    x_sum = 0.0
+    y_sum = 0.0
+
+    for angle in angles
+        x_sum += cos(angle)
+        y_sum += sin(angle)
+    end
+
+    mean_x = x_sum / length(angles)
+    mean_y = y_sum / length(angles)
+
+    mean_angle = atan(mean_y, mean_x)
+
+    if mean_angle < 0
+        mean_angle += 2 * pi
+    end
+
+    return mean_angle
+end
+
+"""
+    angle_mean(matrix::Array{Float64, 2}, dim::Int)
+
+Compute the mean angle along the specified dimension of the given matrix.
+
+# Arguments
+- `matrix::Array{Float64, 2}`: A 2D array containing angles in radians.
+- `dim::Int`: The dimension along which to compute the mean angle (1 for row-wise or 2 for column-wise).
+
+# Returns
+- `result`: A vector containing the mean angles computed along the specified dimension.
+"""
+function angle_mean(matrix::Array{Float64, 2}, dim::Int)
+    if isempty(matrix)
+        error("Input matrix cannot be empty")
+    end
+    
+    if dim < 1 || dim > 2
+        error("Invalid dimension. The dimension must be 1 or 2")
+    end
+
+    if dim == 1
+        result_size = size(matrix, 2)
+    else
+        result_size = size(matrix, 1)
+    end
+    
+    result = zeros(Float64, result_size)
+
+    for i in 1:result_size
+        if dim == 1
+            angles = matrix[:, i]
+        else
+            angles = matrix[i, :]
+        end
+
+        x_sum = 0.0
+        y_sum = 0.0
+
+        for angle in angles
+            x_sum += cos(angle)
+            y_sum += sin(angle)
+        end
+
+        mean_x = x_sum / length(angles)
+        mean_y = y_sum / length(angles)
+
+        mean_angle = atan(mean_y, mean_x)
+
+        result[i] = mean_angle
+    end
+
+    return result
+end
+
+
+"""
+    angle_std(angles::Vector{Float64})
+
+Compute the standard deviation of the given angles vector.
+
+# Arguments
+- `angles::Vector{Float64}`: A vector of angles in radians.
+
+# Returns
+- `std_deviation`: The standard deviation of the given angles, in radians.
+"""
+function angle_std(angles::Vector{Float64})
+    if isempty(angles)
+        error("Input list cannot be empty")
+    end
+
+    n = length(angles)
+    
+    if n == 1
+        return 0.0
+    end
+
+    x_sum = 0.0
+    y_sum = 0.0
+
+    for angle in angles
+        x_sum += cos(angle)
+        y_sum += sin(angle)
+    end
+
+    mean_x = x_sum / n
+    mean_y = y_sum / n
+
+    sum_of_squared_differences = 0.0
+
+    for angle in angles
+        x_diff = cos(angle) - mean_x
+        y_diff = sin(angle) - mean_y
+        sum_of_squared_differences += x_diff^2 + y_diff^2
+    end
+
+    variance = sum_of_squared_differences / (n - 1)
+    std_deviation = sqrt(variance)
+
+    return std_deviation
 end

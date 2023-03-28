@@ -9,7 +9,7 @@ include("fit.jl")
 
 export
     # model.jl
-    ModelParameters,
+    HBParams,
     joint_logprob_flat,
     joint_logprob,
     joint_logprob_flat_negated,
@@ -23,8 +23,13 @@ export
     get_corrected_r,
     exp_r,
     get_datasets,
+    convert_hbparams_to_ps,
+    convert_hbdatasets_to_behs,
+    angle_mean,
+    angle_std,
     # variability.jl
     get_variability,
+    get_variability_subtypes,
     # fit.jl
     initialize_params,
     optimize_MAP

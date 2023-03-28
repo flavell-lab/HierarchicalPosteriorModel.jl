@@ -1,5 +1,5 @@
 """
-struct ModelParameters
+struct HBParams
 
 A structure for holding the mean (mu), standard deviation (sigma), and the spherical coordinates (x) of a model.
 
@@ -8,7 +8,7 @@ A structure for holding the mean (mu), standard deviation (sigma), and the spher
 - `sigma::Vector{Float64}`: A vector of the global standard deviation estimate for each parameter.
 - `x::Vector{Vector{Float64}}`: A vector of vectors representing the best parameters for each individual dataset.
 """
-struct ModelParameters
+struct HBParams
     mu::Vector{Float64}
     sigma::Vector{Float64}
     x::Vector{Vector{Float64}}
@@ -47,7 +47,6 @@ function joint_logprob_flat(params_flat::Vector, data::Vector{Matrix{Float64}}, 
     logprob += Distributions.logpdf(Normal(-1, 1), sigma[idx_scaling[1]])  # Prior for sigma_r
     logprob += sum(Distributions.logpdf.(Normal(-3, 1), sigma[idx_scaling[2:end]]))  # Prior for sigma_theta and sigma_phi
 
-    r = exp(mu[idx_scaling[1]])
     exp_sigma = exp.(sigma) .+ fill(1e-4, length(sigma))
 
     # Add log probability of lower-level parameters and data
@@ -62,7 +61,7 @@ function joint_logprob_flat(params_flat::Vector, data::Vector{Matrix{Float64}}, 
             if j in idx_scaling[2:3]
                 logprob += Distributions.logpdf(Normal(0, exp_sigma[j]), angle_diff(mu[j], x_i_spher[j]))
             elseif j == idx_scaling[1]
-                logprob += Distributions.logpdf(Normal(r, exp_sigma[j]), x_i_spher_scaling[1])
+                logprob += Distributions.logpdf(Normal(mu[j], exp_sigma[j]), x_i_spher_scaling[1])
             else
                 logprob += Distributions.logpdf(Normal(mu[j], exp_sigma[j]), x_i_spher[j])
             end
@@ -74,12 +73,12 @@ function joint_logprob_flat(params_flat::Vector, data::Vector{Matrix{Float64}}, 
 end
 
 """
-    joint_logprob(params::ModelParameters, data::Vector{Matrix{Float64}}, mvns::Vector; idx_scaling::Vector{Int64}=[2,3,4])
+    joint_logprob(params::HBParams, data::Vector{Matrix{Float64}}, mvns::Vector; idx_scaling::Vector{Int64}=[2,3,4])
 
-Compute the joint log probability of a ModelParameters instance given the data and multivariate normal distributions (mvns).
+Compute the joint log probability of a HBParams instance given the data and multivariate normal distributions (mvns).
 
 # Arguments
-- `params::ModelParameters`: A ModelParameters instance containing the mu, sigma, and x parameters.
+- `params::HBParams`: A HBParams instance containing the mu, sigma, and x parameters.
 - `data::Vector{Matrix{Float64}}`: A vector of matrices representing the data (CePNEM fit parameters) for each dataset.
 - `mvns::Vector`: A vector of multivariate normal distributions corresponding to the data.
 - `idx_scaling::Vector{Int64}`: An optional vector of indices indicating the parameters that need to be transformed to Cartesian coordinates for comparison into `mvns`.
@@ -88,7 +87,7 @@ Currently, it is not supported for this to be any value other than its default, 
 # Returns
 - `logprob`: The computed joint log probability of the given parameters.
 """
-function joint_logprob(params::ModelParameters, data::Vector{Matrix{Float64}}, mvns::Vector; idx_scaling::Vector{Int64}=[2,3,4])
+function joint_logprob(params::HBParams, data::Vector{Matrix{Float64}}, mvns::Vector; idx_scaling::Vector{Int64}=[2,3,4])
     n_params = size(data[1], 2)
     mu = params.mu
     sigma = params.sigma
