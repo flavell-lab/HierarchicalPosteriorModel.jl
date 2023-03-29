@@ -30,7 +30,7 @@ of a sphere.
 """
 function angular_log_probability(theta, phi)
     joint_pdf = abs(sin(theta)) / (2 * pi^2)
-    log_prob = log(joint_pdf)
+    log_prob = log(joint_pdf + 1e-8)
     return log_prob
 end
 
