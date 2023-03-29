@@ -29,7 +29,7 @@ of a sphere.
   input angles (θ, φ) under the uniform prior.
 """
 function angular_log_probability(theta, phi)
-    joint_pdf = sin(theta) / (2 * pi^2)
+    joint_pdf = abs(sin(theta)) / (2 * pi^2)
     log_prob = log(joint_pdf)
     return log_prob
 end
