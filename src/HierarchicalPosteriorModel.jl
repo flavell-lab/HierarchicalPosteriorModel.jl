@@ -10,6 +10,7 @@ include("fit.jl")
 export
     # model.jl
     HBParams,
+    angular_log_probability,
     joint_logprob_flat,
     joint_logprob,
     joint_logprob_flat_negated,

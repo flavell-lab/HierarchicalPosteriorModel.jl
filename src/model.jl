@@ -15,6 +15,26 @@ struct HBParams
 end
 
 """
+    angular_log_probability(theta, phi)
+
+Compute the log-probability of a given (θ, φ) pair under the uniform prior over the surface
+of a sphere.
+
+# Arguments
+- `theta::Real`: Polar angle θ ∈ [0, π]
+- `phi::Real`: Azimuthal angle φ ∈ [0, 2π]
+
+# Returns
+- `log_prob::Real`: The natural logarithm of the joint probability density function of the
+  input angles (θ, φ) under the uniform prior.
+"""
+function angular_log_probability(theta, phi)
+    joint_pdf = sin(theta) / (2 * pi^2)
+    log_prob = log(joint_pdf)
+    return log_prob
+end
+
+"""
     joint_logprob_flat(params_flat::Vector, data::Vector{Matrix{Float64}}, mvns::Vector, idx_scaling::Vector{Int64})
 
 Compute the joint log probability of a flat parameter vector given the data, multivariate normal distributions (mvns), and scaling indices (idx_scaling).
@@ -41,7 +61,8 @@ function joint_logprob_flat(params_flat::Vector, data::Vector{Matrix{Float64}}, 
 
     # Add log probability of higher-level parameters
     logprob += sum(Distributions.logpdf.(Normal(0, 1), mu[[i for i in 1:length(mu) if !(i in idx_scaling)]]))  # Prior for c_vT and lambda
-    logprob += Distributions.logpdf(Normal(0,1), mu[idx_scaling[1]]) # Prior for r; note that prior for phi and theta is uniform
+    logprob += Distributions.logpdf(Normal(0,1), mu[idx_scaling[1]]) # Prior for r
+    logprob += angular_log_probability(mu[idx_scaling[2]], mu[idx_scaling[3]]) # prior for theta and phi is uniform
 
     logprob += sum(Distributions.logpdf.(Normal(-3, 1), sigma[[i for i in 1:length(mu) if !(i in idx_scaling)]]))  # Prior for sigma_cvT and sigma_lambda
     logprob += Distributions.logpdf(Normal(-1, 1), sigma[idx_scaling[1]])  # Prior for sigma_r
@@ -60,8 +81,6 @@ function joint_logprob_flat(params_flat::Vector, data::Vector{Matrix{Float64}}, 
         for j in 1:size(P_i,2)
             if j in idx_scaling[2:3]
                 logprob += Distributions.logpdf(Normal(0, exp_sigma[j]), angle_diff(mu[j], x_i_spher[j]))
-            elseif j == idx_scaling[1]
-                logprob += Distributions.logpdf(Normal(mu[j], exp_sigma[j]), x_i_spher_scaling[1])
             else
                 logprob += Distributions.logpdf(Normal(mu[j], exp_sigma[j]), x_i_spher[j])
             end
