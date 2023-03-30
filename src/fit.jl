@@ -75,7 +75,7 @@ Initialize the model parameters based on the given parameter samples `Ps`.
 """
 function initialize_params(Ps::Vector{Matrix{Float64}}; idx_scaling::Vector{Int64}=[2,3,4])
     means = [mean(P, dims=1)[1, :] for P in Ps]
-    mu_init = mean(means, dims=1)[1]
+    mu_init = params_to_spher(mean(means, dims=1)[1])
 
     x_init = means
 
