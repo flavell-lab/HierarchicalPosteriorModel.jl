@@ -9,14 +9,17 @@ Optimize the maximum a posteriori (MAP) estimate for the given parameter samples
 - `idx_scaling::Vector{Int64}`: An optional vector of indices indicating the parameters that need to be transformed to Cartesian coordinates for comparison into `mvns`.
     Currently, it is not supported for this to be any value other than its default `[2,3,4]`.
 - `max_iters::Int64`: An optional integer indicating the maximum number of iterations for the optimization process. Default 200.
+- `mvns::Union{Vector, Nothing}`: An optional vector of multivariate normal distributions corresponding to the data. If `nothing`, they will be computed.
 
 # Returns
 - `params_opt_struct`: A HBParams instance containing the optimized values for mu, sigma, and x parameters.
 - `result`: The result of the optimization process.
 """
-function optimize_MAP(Ps::Vector{Matrix{Float64}}, params_init::HBParams; idx_scaling::Vector{Int64}=[2,3,4], max_iters::Int64=200)
-    # Initialize the KDEs
-    mvns = fit_multivariate_normals(Ps)
+function optimize_MAP(Ps::Vector{Matrix{Float64}}, params_init::HBParams; idx_scaling::Vector{Int64}=[2,3,4], max_iters::Int64=200, mvns::Union{Vector, Nothing}=nothing)
+    # Initialize the multivariate normal approximations
+    if isnothing(mvns)
+        mvns = fit_multivariate_normals(Ps) 
+    end
 
     # Flatten the initial parameters
     mu_init = params_init.mu
