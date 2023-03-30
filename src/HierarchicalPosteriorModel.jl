@@ -23,6 +23,7 @@ export
     get_Ps,
     get_corrected_r,
     exp_r,
+    params_to_spher,
     get_datasets,
     convert_hbparams_to_ps,
     convert_hbdatasets_to_behs,

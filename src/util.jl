@@ -161,6 +161,25 @@ function get_corrected_r(analysis_dict, mu)
 end
 
 """
+    params_to_spher(params::Vector{Float64}) -> Vector{Float64}
+
+Convert a vector of parameters from Cartesian to spherical coordinates. This function expects
+a vector of 5 parameters, where the first element is `c_vT`, the next three elements represent
+`c_v`, `c_θh`, and `c_P` in Cartesian coordinates, and the last element is `s0`. The output will
+have the same structure, but with the middle three elements in spherical coordinates.
+
+# Arguments
+- `params::Vector{Float64}`: A vector of 5 parameters with the structure [c_vT, c_v, c_θh, c_P, s0].
+
+# Returns
+- `Vector{Float64}`: A vector of 5 parameters with the structure [c_vT, log(r), θ, φ, s0] in spherical coordinates.
+"""
+function params_to_spher(params::Vector{Float64})
+    log_r = x->[log(x[1]), x[2], x[3]]
+    return [params[1], log_r(cart2spher(params[2:4]))..., params[5]]
+end
+
+"""
     exp_r(vec)
 
 Compute the exponential of the first element of the input vector and concatenate it with the rest of the vector.
@@ -223,7 +242,7 @@ function convert_hbparams_to_ps(hbparams::Vector{Float64})
     ps[2:4] = spher2cart(exp_r(hbparams[2:4])) # c_v, c_θh, c_P
     ps[5] = 0.0
     ps[6] = 0.0
-    ps[7] = hbparams[5] # τ
+    ps[7] = hbparams[5] # s0
     ps[8] = 0.0
     return deepcopy(ps)
 end

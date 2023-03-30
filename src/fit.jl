@@ -79,11 +79,9 @@ function initialize_params(Ps::Vector{Matrix{Float64}}; idx_scaling::Vector{Int6
 
     x_init = means
 
-    mu_init[idx_scaling] = cart2spher(mu_init[idx_scaling])
-    mu_init[idx_scaling[1]] = log(mu_init[idx_scaling][1])
+    mu_init = params_to_spher(mu_init)
     for i in 1:length(Ps)
-        x_init[i][idx_scaling] = cart2spher(x_init[i][idx_scaling])
-        x_init[i][idx_scaling[1]] = log(x_init[i][idx_scaling][1])
+        x_init[i] = params_to_spher(x_init[i])
     end
 
     sigma_init = [log(std([x_init[i][j] for i=1:length(Ps)])) for j=1:length(mu_init)]
