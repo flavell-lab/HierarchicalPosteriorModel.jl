@@ -79,7 +79,6 @@ function initialize_params(Ps::Vector{Matrix{Float64}}; idx_scaling::Vector{Int6
 
     x_init = means
 
-    mu_init = params_to_spher(mu_init)
     for i in 1:length(Ps)
         x_init[i] = params_to_spher(x_init[i])
     end
