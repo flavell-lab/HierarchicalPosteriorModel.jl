@@ -60,15 +60,19 @@ function joint_logprob_flat(params_flat::Vector, data::Vector{Matrix{Float64}}, 
     logprob = 0.0
 
     # Add log probability of higher-level parameters
-    logprob += sum(Distributions.logpdf.(Normal(0, 1), mu[[i for i in 1:length(mu) if !(i in idx_scaling)]]))  # Prior for c_vT and lambda
-    logprob += Distributions.logpdf(Normal(0,1), mu[idx_scaling[1]]) # Prior for r
-    logprob += angular_log_probability(mu[idx_scaling[2]], mu[idx_scaling[3]]) # prior for theta and phi is uniform
+    logprob += Distributions.logpdf(Normal(0.0,0.3), mu[1])  # Prior for c_vT
+    logprob += Distributions.logpdf(Normal(0.1,0.4), mu[2]) # Prior for log(r)
+    logprob += angular_log_probability(mu[3], mu[4]) # prior for theta and phi is uniform on the sphere
+    logprob += Distributions.logpdf(Normal(0.7,0.7), mu[5])  # Prior for lambda
 
-    logprob += sum(Distributions.logpdf.(Normal(-3, 1), sigma[[i for i in 1:length(mu) if !(i in idx_scaling)]]))  # Prior for sigma_cvT and sigma_lambda
-    logprob += Distributions.logpdf(Normal(-1, 1), sigma[idx_scaling[1]])  # Prior for sigma_r
-    logprob += sum(Distributions.logpdf.(Normal(-3, 1), sigma[idx_scaling[2:end]]))  # Prior for sigma_theta and sigma_phi
 
-    exp_sigma = exp.(sigma) .+ fill(1e-4, length(sigma))
+    logprob += sum(Distributions.logpdf.(Normal(-4.3,5.0), sigma[1]))  # Prior for sigma_cvT
+    logprob += Distributions.logpdf(Normal(-3.0,4.0), sigma[2])  # Prior for sigma_r
+    logprob += sum(Distributions.logpdf.(Normal(-3.4,4.1), sigma[3]))  # Prior for sigma_theta
+    logprob += sum(Distributions.logpdf.(Normal(-0.9,2.7), sigma[4]))  # Prior for sigma_phi
+    logprob += sum(Distributions.logpdf.(Normal(-0.2,1.4), sigma[5]))  # Prior for sigma_lambda
+
+    exp_sigma = exp.(sigma) .+ fill(5e-4, length(sigma))
 
     # Add log probability of lower-level parameters and data
     for i in 1:length(data)
