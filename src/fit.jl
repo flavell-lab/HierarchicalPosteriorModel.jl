@@ -86,7 +86,7 @@ function initialize_params(Ps::Vector{Matrix{Float64}}; idx_scaling::Vector{Int6
         x_init[i][idx_scaling[1]] = log(x_init[i][idx_scaling][1])
     end
 
-    sigma_init = [std([x_init[i][j] for i=1:length(Ps)]) for j=1:length(mu_init)]
+    sigma_init = [log(std([x_init[i][j] for i=1:length(Ps)])) for j=1:length(mu_init)]
 
     return HBParams(mu_init, sigma_init, x_init)
 end
