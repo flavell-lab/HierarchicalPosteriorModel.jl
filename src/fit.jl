@@ -83,7 +83,9 @@ function initialize_params(Ps::Vector{Matrix{Float64}}; idx_scaling::Vector{Int6
         x_init[i] = params_to_spher(x_init[i])
     end
 
-    sigma_init = [log(std([x_init[i][j] for i=1:length(Ps)])) for j=1:length(mu_init)]
+    sigma_init = [log(std([x_init[i][j] for i=1:length(Ps)])) for j=1:2]
+    append!(sigma_init, [log(angle_std([x_init[i][j] for i=1:length(Ps)])) for j=3:4])
+    append!(sigma_init, log(std([x_init[i][5] for i=1:length(Ps)])))
 
     return HBParams(mu_init, sigma_init, x_init)
 end
