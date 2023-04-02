@@ -118,7 +118,7 @@ function joint_logprob(params::HBParams, data::Vector{Matrix{Float64}}, mvns::Ve
 
     params_flat = [mu; sigma; vcat(x_spher...)]
 
-    return joint_logprob_flat(params_flat, data, mvns, idx_scaling=idx_scaling)
+    return joint_logprob_flat(params_flat, data, mvns, idx_scaling)
 end
 
 """
