@@ -419,3 +419,35 @@ function angle_std(angles::Vector{Float64})
 
     return std_deviation
 end
+
+function hbparams_to_cart(params)
+    return [params[1], spher2cart(exp_r(params[2:4]))..., params[5]]
+end
+
+
+# Function to compute the mean direction of data points
+function mean_direction(data)
+    n = length(data)
+    mean_dir = sum(data, dims=1) ./ n
+    return mean_dir ./ norm(mean_dir)
+end
+
+# Function to estimate kappa from data points and their mean direction
+function estimate_kappa(data, mean_dir)
+    R_bar = mean([dot(mean_dir, x) for x in data])
+
+    if R_bar < 0.9
+        kappa = R_bar * (2 - R_bar) / (1 - R_bar^2)
+    else
+        kappa = -0.4 + 1.39 * R_bar + 0.43 / (1 - R_bar)
+    end
+
+    return kappa
+end
+
+# Function to fit a vMF distribution to the data points
+function fit_vmf(data)
+    mean_dir = mean_direction(data)
+    kappa = estimate_kappa(data, mean_dir)
+    return VonMisesFisher(mean_dir, kappa)
+end

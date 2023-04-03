@@ -65,27 +65,28 @@ function joint_logprob_flat(params_flat::Vector, data::Vector{Matrix{Float64}}, 
     logprob += angular_log_probability(mu[3], mu[4]) # prior for theta and phi is uniform on the sphere
     logprob += Distributions.logpdf(Normal(0.7,0.7), mu[5])  # Prior for lambda
 
+    logprob += sum(Distributions.logpdf.(Normal(-4.3,5.0), sigma[1]))  # Prior for log(sigma_cvT)
+    logprob += Distributions.logpdf(Normal(-3.0,4.0), sigma[2])  # Prior for log(sigma_logr)
+    logprob += Distributions.logpdf(Normal(1.0, 1.0), sigma[3])  # Prior for log(kappa)
+    # sigma[4] is 0, a placeholder
+    logprob += sum(Distributions.logpdf.(Normal(-0.2,1.4), sigma[5]))  # Prior for log(sigma_lambda)
 
-    logprob += sum(Distributions.logpdf.(Normal(-4.3,5.0), sigma[1]))  # Prior for sigma_cvT
-    logprob += Distributions.logpdf(Normal(-3.0,4.0), sigma[2])  # Prior for sigma_r
-    logprob += sum(Distributions.logpdf.(Normal(-3.4,4.1), sigma[3]))  # Prior for sigma_theta
-    logprob += sum(Distributions.logpdf.(Normal(-0.9,2.7), sigma[4]))  # Prior for sigma_phi
-    logprob += sum(Distributions.logpdf.(Normal(-0.2,1.4), sigma[5]))  # Prior for sigma_lambda
-
-    exp_sigma = exp.(sigma) .+ fill(2e-4, length(sigma))
+    exp_sigma = exp.(sigma) .+ [(i == 3) ? 0 : 2e-4 for i in 1:length(sigma)]
 
     # Add log probability of lower-level parameters and data
     for i in 1:length(data)
         x_i_spher = x_spher[i]
-        x_i_spher_scaling = [exp(x_i_spher[idx_scaling[1]]), x_i_spher[idx_scaling[2]], x_i_spher[idx_scaling[3]]]
 
-        x_i_cart = [x_i_spher[1], spher2cart(x_i_spher_scaling)..., x_i_spher[5]]
+        x_i_cart = hbparams_to_cart(x_i_spher)
 
         P_i = data[i]
         for j in 1:size(P_i,2)
-            if j in idx_scaling[2:3]
-                logprob += Distributions.logpdf(Normal(0, exp_sigma[j]), angle_diff(mu[j], x_i_spher[j]))
-            else
+            if j == idx_scaling[2]
+                mu_spherical = spher2cart([1.0, mu[3:4]...])
+                vmf = VonMisesFisher(mu_spherical, exp_sigma[j])
+                x_i_cart_j = spher2cart([1.0, x_i_spher[3:4]...])
+                logprob += Distributions.logpdf(vmf, x_i_cart_j)
+            elseif j != idx_scaling[3]
                 logprob += Distributions.logpdf(Normal(mu[j], exp_sigma[j]), x_i_spher[j])
             end
         end
@@ -94,6 +95,7 @@ function joint_logprob_flat(params_flat::Vector, data::Vector{Matrix{Float64}}, 
 
     return logprob
 end
+
 
 """
     joint_logprob(params::HBParams, data::Vector{Matrix{Float64}}, mvns::Vector; idx_scaling::Vector{Int64}=[2,3,4])
@@ -111,7 +113,6 @@ Currently, it is not supported for this to be any value other than its default, 
 - `logprob`: The computed joint log probability of the given parameters.
 """
 function joint_logprob(params::HBParams, data::Vector{Matrix{Float64}}, mvns::Vector; idx_scaling::Vector{Int64}=[2,3,4])
-    n_params = size(data[1], 2)
     mu = params.mu
     sigma = params.sigma
     x_spher = params.x

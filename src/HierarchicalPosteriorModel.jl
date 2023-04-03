@@ -29,6 +29,10 @@ export
     convert_hbdatasets_to_behs,
     angle_mean,
     angle_std,
+    hbparams_to_cart,
+    mean_direction,
+    estimate_kappa,
+    fit_vmf,
     # variability.jl
     get_variability,
     get_variability_subtypes,

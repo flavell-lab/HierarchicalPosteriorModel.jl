@@ -75,7 +75,8 @@ Initialize the model parameters based on the given parameter samples `Ps`.
 """
 function initialize_params(Ps::Vector{Matrix{Float64}}; idx_scaling::Vector{Int64}=[2,3,4])
     means = [mean(P, dims=1)[1, :] for P in Ps]
-    mu_init = params_to_spher(mean(means, dims=1)[1])
+    mu_init_cart = mean(means, dims=1)[1]
+    mu_init = params_to_spher(mu_init_cart)
 
     x_init = means
 
@@ -84,7 +85,8 @@ function initialize_params(Ps::Vector{Matrix{Float64}}; idx_scaling::Vector{Int6
     end
 
     sigma_init = [log(std([x_init[i][j] for i=1:length(Ps)])) for j=1:2]
-    append!(sigma_init, [log(angle_std([x_init[i][j] for i=1:length(Ps)])) for j=3:4])
+    append!(sigma_init, log(estimate_kappa([mu[2:4] ./ norm(mu[2:4]) for mu in means], mu_init_cart[2:4] ./ norm(mu_init[2:4]))))
+    append!(sigma_init, 0.0)
     append!(sigma_init, log(std([x_init[i][5] for i=1:length(Ps)])))
 
     return HBParams(mu_init, sigma_init, x_init)
