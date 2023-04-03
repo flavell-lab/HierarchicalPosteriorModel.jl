@@ -71,7 +71,7 @@ function joint_logprob_flat(params_flat::Vector, data::Vector{Matrix{Float64}}, 
     # sigma[4] is 0, a placeholder
     logprob += sum(Distributions.logpdf.(Normal(-0.2,1.4), sigma[5]))  # Prior for log(sigma_lambda)
 
-    exp_sigma = exp.(sigma) .+ [(i == 3) ? 0 : 2e-4 for i in 1:length(sigma)]
+    exp_sigma = exp.(sigma) .+ 2e-4
 
     # Add log probability of lower-level parameters and data
     for i in 1:length(data)
