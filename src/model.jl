@@ -65,11 +65,11 @@ function joint_logprob_flat(params_flat::Vector, data::Vector{Matrix{Float64}}, 
     logprob += angular_log_probability(mu[3], mu[4]) # prior for theta and phi is uniform on the sphere
     logprob += Distributions.logpdf(Normal(0.7,0.7), mu[5])  # Prior for lambda
 
-    logprob += sum(Distributions.logpdf.(Normal(-3.0,1.0), sigma[1]))  # Prior for log(sigma_cvT)
-    logprob += Distributions.logpdf(Normal(-2.0,1.0), sigma[2])  # Prior for log(sigma_logr)
+    logprob += sum(Distributions.logpdf.(Normal(-1.0,1.0), sigma[1]))  # Prior for log(sigma_cvT)
+    logprob += Distributions.logpdf(Normal(-1.0,1.0), sigma[2])  # Prior for log(sigma_logr)
     logprob += Distributions.logpdf(Normal(1.0, 1.0), sigma[3])  # Prior for log(kappa)
     # sigma[4] is 0, a placeholder
-    logprob += sum(Distributions.logpdf.(Normal(-2.0,1.0), sigma[5]))  # Prior for log(sigma_lambda)
+    logprob += sum(Distributions.logpdf.(Normal(-1.0,1.0), sigma[5]))  # Prior for log(sigma_lambda)
 
     exp_sigma = exp.(sigma) .+ 2e-4
 
