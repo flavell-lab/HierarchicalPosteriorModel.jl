@@ -85,7 +85,8 @@ function initialize_params(Ps::Vector{Matrix{Float64}}; idx_scaling::Vector{Int6
     end
 
     sigma_init = [log(std([x_init[i][j] for i=1:length(Ps)])) for j=1:2]
-    append!(sigma_init, log(estimate_kappa([mu[2:4] ./ norm(mu[2:4]) for mu in means], mu_init_cart[2:4] ./ norm(mu_init_cart[2:4]))))
+    data_spher = [mu[2:4] ./ norm(mu[2:4]) for mu in means]
+    append!(sigma_init, log(estimate_kappa(data_spher, mean_direction(data_spher))))
     append!(sigma_init, 0.0)
     append!(sigma_init, log(std([x_init[i][5] for i=1:length(Ps)])))
 
