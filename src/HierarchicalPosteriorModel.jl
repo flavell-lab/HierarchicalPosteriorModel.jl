@@ -1,6 +1,7 @@
 module HierarchicalPosteriorModel
 
-using Distributions, Optim, Statistics, StatsBase, LinearAlgebra, ForwardDiff
+using Distributions, Optim, Statistics, StatsBase, LinearAlgebra, ForwardDiff,
+    EncoderModelGen
 
 include("model.jl")
 include("util.jl")
