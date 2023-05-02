@@ -155,8 +155,15 @@ Compute the corrected r value based on extrapolating the given mu array to the s
 - `corrected_r`: The computed corrected r value.
 """
 function get_corrected_r(analysis_dict, mu)
+    extrapolated_behaviors = analysis_dict["extrapolated_behaviors"]
+
+    get_corrected_r(extrapolated_behaviors, mu)
+end
+
+function get_corrected_r(extrapolated_behaviors, mu)
     mu_cart = [mu[1], spher2cart(exp_r(mu[2:4]))..., 0, 0, mu[5], 0]
-    extrap = model_nl8(length(analysis_dict["extrapolated_behaviors"][:,1]), mu_cart..., analysis_dict["extrapolated_behaviors"][:,1], analysis_dict["extrapolated_behaviors"][:,2], analysis_dict["extrapolated_behaviors"][:,3])
+    extrap = model_nl8(length(extrapolated_behaviors[:,1]), mu_cart..., extrapolated_behaviors[:,1], extrapolated_behaviors[:,2], extrapolated_behaviors[:,3])
+
     return std(extrap)
 end
 
