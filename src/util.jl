@@ -247,12 +247,14 @@ function convert_hbparams_to_ps(hbparams::Vector{Float64})
     ps = zeros(8)
     ps[1] = hbparams[1] # c_vT
     ps[2:4] = spher2cart(exp_r(hbparams[2:4])) # c_v, c_θh, c_P
+    ps[3] = -ps[3] # original model parameters have opposite sign for c_θh
     ps[5] = 0.0
     ps[6] = 0.0
-    ps[7] = hbparams[5] # s0
+    ps[7] = hbparams[5] # τ
     ps[8] = 0.0
     return deepcopy(ps)
 end
+
 
 """
     convert_hbdatasets_to_behs(fit_results::Dict, hbdatasets::Vector; max_len::Int=800)
@@ -262,14 +264,15 @@ Convert the given hbdatasets into separate v, θh, and P arrays based on fit_res
 # Arguments
 - `fit_results::Dict`: A dictionary containing the results of a model fitting process.
 - `hbdatasets::Vector`: A list of tuples containing the selected dataset identifier, range index, and number of samples.
-- `max_len::Int`: The maximum length of each dataset (default: 800).
+- `θh_pos_is_ventral::Dict{String, Bool}`: Whether the θh values in the datasets are in ventral or dorsal coordinates.
+- `max_len::Int` (optional, default 800): The maximum length of each dataset.
 
 # Returns
 - `v`: A vector containing the concatenated v values from the datasets.
 - `θh`: A vector containing the concatenated θh values from the datasets.
 - `P`: A vector containing the concatenated P values from the datasets.
 """
-function convert_hbdatasets_to_behs(fit_results::Dict, hbdatasets::Vector; max_len::Int=800)
+function convert_hbdatasets_to_behs(fit_results::Dict, hbdatasets::Vector, θh_pos_is_ventral::Dict{String, Bool}; max_len::Int=800)
     v = zeros(max_len*length(hbdatasets))
     θh = zeros(max_len*length(hbdatasets))
     P = zeros(max_len*length(hbdatasets))
@@ -278,7 +281,7 @@ function convert_hbdatasets_to_behs(fit_results::Dict, hbdatasets::Vector; max_l
         rng_t = fit_results[dataset]["ranges"][rng]
         len = length(rng_t)
         v[count:count+len-1] .= fit_results[dataset]["v"][rng_t]
-        θh[count:count+len-1] .= fit_results[dataset]["θh"][rng_t]
+        θh[count:count+len-1] .= fit_results[dataset]["θh"][rng_t] .* (2*θh_pos_is_ventral[dataset] - 1)
         P[count:count+len-1] .= fit_results[dataset]["P"][rng_t]
         count += len
     end
@@ -457,4 +460,28 @@ function fit_vmf(data)
     mean_dir = mean_direction(data)
     kappa = estimate_kappa(data, mean_dir)
     return VonMisesFisher(mean_dir, kappa)
+end
+
+"""
+compute_cartesian_average(hbparams::HBParams)
+
+Compute the Cartesian average of the given hierarchical Bayesian parameters.
+
+# Arguments
+- `hbparams::HBParams`: A hierarchical Bayesian parameter object.
+
+# Returns
+- `ps_tot::Vector{Float64}`: The Cartesian average of the given hierarchical Bayesian parameters.
+"""
+function compute_cartesian_average(hbparams::HBParams)
+    ps = zeros(length(hbdatasets), 8)
+
+    for i in 1:length(hbparams.x)
+        ps[i,:] .= convert_hbparams_to_ps(hbparams.x[i])
+    end
+    ps_tot = deepcopy(convert_hbparams_to_ps(hbparams.mu))
+    ps_tot[2:4] .= mean(ps, dims=1)[1,2:4] # use HB model estimates directly for parameters other than spherical ones
+    # use individual dataset means for spherical parameters in case of bimodal distributions
+
+    return ps_tot
 end

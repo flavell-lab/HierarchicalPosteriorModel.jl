@@ -34,6 +34,7 @@ export
     mean_direction,
     estimate_kappa,
     fit_vmf,
+    compute_cartesian_average,
     # variability.jl
     get_variability,
     get_variability_subtypes,
