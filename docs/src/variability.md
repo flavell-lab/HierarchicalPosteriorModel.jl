@@ -1,6 +1,6 @@
-# Simulation-Based Calibration API
+# Variability API
 
 ```@docs
-rank_test
-χ2_uniformtest
+get_variability
+get_variability_subtypes
 ```
